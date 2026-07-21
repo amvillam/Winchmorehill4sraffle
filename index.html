@@ -213,7 +213,7 @@
       <div id="receiptSeller" class="small"></div>
       <div id="receiptPayment" class="small"></div>
       <div class="actions">
-        <button type="button" class="btn primary" id="saveImage">Save Ticket Image</button>
+        <button type="button" class="btn primary" id="saveImage">Share / Save Ticket</button>
         <button type="button" class="btn secondary" id="closeReceipt">Close</button>
       </div>
     </div>
@@ -368,67 +368,112 @@ function showReceipt(ticket) {
     ticket.payment_status === "paid" ? "PAYMENT RECEIVED" : "PAYMENT PENDING";
 }
 
-function saveTicketImage() {
+async function saveTicketImage() {
   if (!latestReceipt) return;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 1350;
-  const ctx = canvas.getContext("2d");
+  const button = document.getElementById("saveImage");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Preparing...";
 
-  const g = ctx.createLinearGradient(0,0,1080,1350);
-  g.addColorStop(0,"#26083f");
-  g.addColorStop(1,"#641f93");
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,1080,1350);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1080;
+    canvas.height = 1350;
+    const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#f5c443";
-  ctx.fillRect(55,55,970,1240);
-  ctx.fillStyle = "#26083f";
-  ctx.fillRect(82,82,916,1186);
+    const g = ctx.createLinearGradient(0,0,1080,1350);
+    g.addColorStop(0,"#26083f");
+    g.addColorStop(1,"#641f93");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,1080,1350);
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 56px Arial";
-  ctx.fillText("WINCHMORE HILL 4s",540,190);
+    ctx.fillStyle = "#f5c443";
+    ctx.fillRect(55,55,970,1240);
+    ctx.fillStyle = "#26083f";
+    ctx.fillRect(82,82,916,1186);
 
-  ctx.fillStyle = "#f5c443";
-  ctx.font = "bold 44px Arial";
-  ctx.fillText("£1,000 CASH DRAW",540,260);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 56px Arial";
+    ctx.fillText("WINCHMORE HILL 4s",540,190);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "30px Arial";
-  ctx.fillText("OFFICIAL DIGITAL TICKET",540,350);
+    ctx.fillStyle = "#f5c443";
+    ctx.font = "bold 44px Arial";
+    ctx.fillText("£1,000 CASH DRAW",540,260);
 
-  ctx.fillStyle = "#f5c443";
-  ctx.font = "bold 190px Arial";
-  ctx.fillText(latestReceipt.number,540,640);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "30px Arial";
+    ctx.fillText("OFFICIAL DIGITAL TICKET",540,350);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 38px Arial";
-  ctx.fillText("Buyer",540,760);
-  ctx.font = "34px Arial";
-  ctx.fillText(latestReceipt.buyer_name || "",540,820);
+    ctx.fillStyle = "#f5c443";
+    ctx.font = "bold 190px Arial";
+    ctx.fillText(latestReceipt.number,540,640);
 
-  ctx.font = "30px Arial";
-  ctx.fillText("Sold by: " + (latestReceipt.sold_by || ""),540,920);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 38px Arial";
+    ctx.fillText("Buyer",540,760);
+    ctx.font = "34px Arial";
+    ctx.fillText(latestReceipt.buyer_name || "",540,820);
 
-  ctx.fillStyle = latestReceipt.payment_status === "paid" ? "#f5c443" : "#ffffff";
-  ctx.font = "bold 32px Arial";
-  ctx.fillText(latestReceipt.payment_status === "paid" ? "PAYMENT RECEIVED" : "PAYMENT PENDING",540,995);
+    ctx.font = "30px Arial";
+    ctx.fillText("Sold by: " + (latestReceipt.sold_by || ""),540,920);
 
-  ctx.fillStyle = "#f5c443";
-  ctx.font = "bold 29px Arial";
-  ctx.fillText("Thank you for supporting the team!",540,1125);
+    ctx.fillStyle = latestReceipt.payment_status === "paid" ? "#f5c443" : "#ffffff";
+    ctx.font = "bold 32px Arial";
+    ctx.fillText(latestReceipt.payment_status === "paid" ? "PAYMENT RECEIVED" : "PAYMENT PENDING",540,995);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "23px Arial";
-  ctx.fillText("Keep this image as proof of your raffle number.",540,1190);
+    ctx.fillStyle = "#f5c443";
+    ctx.font = "bold 29px Arial";
+    ctx.fillText("Thank you for supporting the team!",540,1125);
 
-  const link = document.createElement("a");
-  link.download = `WinchmoreHill4s-Ticket-${latestReceipt.number}.png`;
-  link.href = canvas.toDataURL("image/png");
-  link.click();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "23px Arial";
+    ctx.fillText("Keep this image as proof of your raffle number.",540,1190);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(result => result ? resolve(result) : reject(new Error("Could not create ticket image.")), "image/png");
+    });
+
+    const filename = `WinchmoreHill4s-Ticket-${latestReceipt.number}.png`;
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        title: `Winchmore Hill 4s Ticket ${latestReceipt.number}`,
+        text: `Your Winchmore Hill 4s raffle ticket number is ${latestReceipt.number}.`,
+        files: [file]
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      const imageWindow = window.open(url, "_blank");
+      if (!imageWindow) {
+        window.location.href = url;
+      }
+      showMessage("The ticket image has opened. Press and hold it to save or share.", "ok");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } else {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+    console.error(error);
+    showMessage("Could not open the ticket image. Please try again.", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 document.getElementById("refresh").addEventListener("click", () => loadTickets());
