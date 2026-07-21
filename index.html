@@ -34,7 +34,7 @@
     main { max-width:1000px; margin:auto; padding:16px; }
     .stats {
       display:grid;
-      grid-template-columns:repeat(3,1fr);
+      grid-template-columns:repeat(4,1fr);
       gap:10px;
       margin-bottom:14px;
     }
@@ -56,7 +56,7 @@
       font-size:16px;
     }
     button { font:inherit; }
-    .refresh {
+    .refresh, .manager-button {
       border:0;
       background:var(--purple2);
       color:white;
@@ -132,6 +132,45 @@
       padding:16px;
     }
     .receipt.show { display:block; }
+    .manager-panel {
+      margin:16px 0;
+      background:white;
+      border-radius:16px;
+      padding:16px;
+      box-shadow:0 4px 18px rgba(50,20,70,.08);
+    }
+    .manager-grid {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+      margin:12px 0;
+    }
+    .manager-card {
+      background:#f7f1fb;
+      border-radius:12px;
+      padding:12px;
+      text-align:center;
+    }
+    .manager-card strong {
+      display:block;
+      color:var(--purple2);
+      font-size:22px;
+    }
+    .table-wrap { overflow:auto; margin-top:12px; }
+    table { width:100%; border-collapse:collapse; min-width:580px; }
+    th, td { padding:10px; border-bottom:1px solid #eee5f3; text-align:left; }
+    th { background:#f7f1fb; color:var(--purple); }
+    .mini-btn {
+      border:0;
+      border-radius:9px;
+      padding:8px 10px;
+      font-weight:700;
+      cursor:pointer;
+      background:#fdeaea;
+      color:#a32626;
+    }
+    .manager-actions { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+    .manager-actions .btn { flex:0 1 auto; }
     .receipt-number {
       color:var(--purple2);
       font-size:46px;
@@ -142,7 +181,9 @@
     footer { text-align:center; color:var(--muted); padding:22px; font-size:13px; }
     @media(max-width:600px) {
       header h1 { font-size:24px; }
+      .stats { grid-template-columns:repeat(2,1fr); }
       .stat strong { font-size:20px; }
+      .manager-grid { grid-template-columns:1fr; }
       .tickets { grid-template-columns:repeat(4,1fr); }
     }
   </style>
@@ -158,13 +199,15 @@
     <div class="stat"><strong id="soldCount">0</strong>Sold</div>
     <div class="stat"><strong id="availableCount">0</strong>Available</div>
     <div class="stat"><strong id="paidCount">0</strong>Paid</div>
+    <div class="stat"><strong id="collectedTotal">£0</strong>Collected</div>
   </section>
 
   <div id="message" class="message"></div>
 
   <div class="toolbar">
-    <input id="search" class="search" placeholder="Search ticket number, e.g. 087" inputmode="numeric">
+    <input id="search" class="search" placeholder="Search number, buyer, phone or seller">
     <button id="refresh" class="refresh">Refresh</button>
+    <button id="managerOpen" class="manager-button">Manager</button>
   </div>
 
   <div class="legend">
@@ -220,12 +263,58 @@
   </div>
 </dialog>
 
+
+<dialog id="managerDialog">
+  <div class="modal-head"><h2>Manager Dashboard</h2></div>
+  <div class="modal-body">
+    <div id="managerLock">
+      <label for="managerPin">Manager PIN</label>
+      <input class="field" id="managerPin" type="password" inputmode="numeric" placeholder="Enter PIN">
+      <div class="actions">
+        <button type="button" class="btn secondary" id="managerCancel">Cancel</button>
+        <button type="button" class="btn primary" id="managerUnlock">Unlock</button>
+      </div>
+    </div>
+
+    <div id="managerContent" style="display:none">
+      <div class="manager-grid">
+        <div class="manager-card"><strong id="managerSold">0</strong>Sold tickets</div>
+        <div class="manager-card"><strong id="managerPaid">0</strong>Paid tickets</div>
+        <div class="manager-card"><strong id="managerMoney">£0</strong>Collected</div>
+      </div>
+
+      <div class="manager-actions">
+        <button type="button" class="btn primary" id="exportCsv">Export CSV</button>
+        <button type="button" class="btn secondary" id="managerClose">Close</button>
+      </div>
+
+      <h3>Sales by player</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Player</th><th>Sold</th><th>Paid</th><th>Collected</th></tr></thead>
+          <tbody id="sellerRows"></tbody>
+        </table>
+      </div>
+
+      <h3>Sold tickets</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ticket</th><th>Buyer</th><th>Phone</th><th>Seller</th><th>Payment</th><th>Action</th></tr></thead>
+          <tbody id="salesRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</dialog>
+
 <footer>Updates automatically every 5 seconds.</footer>
 
 <script>
 const SUPABASE_URL = "https://vuheyrorksedrlhbgtyy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_aiMwWUJt7SeiEdiQGH8Cjw_FfH2hm2D";
 const TABLE = "tickets";
+const TICKET_PRICE = 20;
+const MANAGER_PIN = "1000";
 
 const headers = {
   "apikey": SUPABASE_KEY,
@@ -242,6 +331,7 @@ const messageEl = document.getElementById("message");
 const dialog = document.getElementById("dialog");
 const form = document.getElementById("saleForm");
 const receipt = document.getElementById("receipt");
+const managerDialog = document.getElementById("managerDialog");
 
 function showMessage(text, type="ok") {
   messageEl.textContent = text;
@@ -271,8 +361,22 @@ async function loadTickets(silent=false) {
 }
 
 function render() {
-  const query = normalizeNumber(searchEl.value);
-  const visible = query ? tickets.filter(t => String(t.number) === query) : tickets;
+  const rawQuery = searchEl.value.trim().toLowerCase();
+  const numberQuery = normalizeNumber(rawQuery);
+
+  const visible = rawQuery
+    ? tickets.filter(ticket => {
+        const values = [
+          String(ticket.number || ""),
+          ticket.buyer_name || "",
+          ticket.buyer_phone || "",
+          ticket.sold_by || ""
+        ].map(value => String(value).toLowerCase());
+
+        return values.some(value => value.includes(rawQuery)) ||
+          (numberQuery && String(ticket.number) === numberQuery);
+      })
+    : tickets;
 
   ticketsEl.innerHTML = "";
   visible.forEach(ticket => {
@@ -289,6 +393,19 @@ function render() {
   document.getElementById("soldCount").textContent = sold;
   document.getElementById("availableCount").textContent = tickets.length - sold;
   document.getElementById("paidCount").textContent = paid;
+  document.getElementById("collectedTotal").textContent = formatMoney(paid * TICKET_PRICE);
+
+  if (document.getElementById("managerContent").style.display !== "none") {
+    renderManager();
+  }
+}
+
+function formatMoney(amount) {
+  return new Intl.NumberFormat("en-GB", {
+    style:"currency",
+    currency:"GBP",
+    maximumFractionDigits:0
+  }).format(amount);
 }
 
 function showSold(ticket) {
@@ -476,7 +593,169 @@ async function saveTicketImage() {
   }
 }
 
+
+function openManager() {
+  document.getElementById("managerPin").value = "";
+  document.getElementById("managerLock").style.display = "block";
+  document.getElementById("managerContent").style.display = "none";
+  managerDialog.showModal();
+}
+
+function unlockManager() {
+  const pin = document.getElementById("managerPin").value;
+  if (pin !== MANAGER_PIN) {
+    showMessage("Incorrect manager PIN.", "error");
+    return;
+  }
+
+  document.getElementById("managerLock").style.display = "none";
+  document.getElementById("managerContent").style.display = "block";
+  renderManager();
+}
+
+function renderManager() {
+  const soldTickets = tickets.filter(ticket => ticket.status === "sold");
+  const paidTickets = soldTickets.filter(ticket => ticket.payment_status === "paid");
+
+  document.getElementById("managerSold").textContent = soldTickets.length;
+  document.getElementById("managerPaid").textContent = paidTickets.length;
+  document.getElementById("managerMoney").textContent = formatMoney(paidTickets.length * TICKET_PRICE);
+
+  const sellers = {};
+  soldTickets.forEach(ticket => {
+    const name = (ticket.sold_by || "Unknown").trim() || "Unknown";
+    if (!sellers[name]) sellers[name] = { sold:0, paid:0 };
+    sellers[name].sold += 1;
+    if (ticket.payment_status === "paid") sellers[name].paid += 1;
+  });
+
+  const sellerRows = document.getElementById("sellerRows");
+  sellerRows.innerHTML = "";
+  Object.entries(sellers)
+    .sort((a,b) => b[1].sold - a[1].sold || a[0].localeCompare(b[0]))
+    .forEach(([name, totals]) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${escapeHtml(name)}</td>
+        <td>${totals.sold}</td>
+        <td>${totals.paid}</td>
+        <td>${formatMoney(totals.paid * TICKET_PRICE)}</td>`;
+      sellerRows.appendChild(row);
+    });
+
+  const salesRows = document.getElementById("salesRows");
+  salesRows.innerHTML = "";
+  soldTickets
+    .sort((a,b) => String(a.number).localeCompare(String(b.number)))
+    .forEach(ticket => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td><strong>${escapeHtml(ticket.number)}</strong></td>
+        <td>${escapeHtml(ticket.buyer_name || "")}</td>
+        <td>${escapeHtml(ticket.buyer_phone || "")}</td>
+        <td>${escapeHtml(ticket.sold_by || "")}</td>
+        <td>${escapeHtml(ticket.payment_status || "pending")}</td>
+        <td><button class="mini-btn" data-reset="${escapeHtml(ticket.number)}">Make available</button></td>`;
+      salesRows.appendChild(row);
+    });
+
+  salesRows.querySelectorAll("[data-reset]").forEach(button => {
+    button.addEventListener("click", () => resetTicket(button.dataset.reset));
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function resetTicket(number) {
+  const ticket = tickets.find(item => String(item.number) === String(number));
+  const buyer = ticket?.buyer_name ? ` sold to ${ticket.buyer_name}` : "";
+
+  if (!confirm(`Make ticket ${number}${buyer} available again?`)) return;
+
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/${TABLE}?number=eq.${encodeURIComponent(number)}&status=eq.sold`,
+      {
+        method:"PATCH",
+        headers:{ ...headers, "Prefer":"return=representation" },
+        body:JSON.stringify({
+          status:"available",
+          buyer_name:null,
+          buyer_phone:null,
+          sold_by:null,
+          payment_status:"pending",
+          notes:null,
+          updated_at:new Date().toISOString()
+        })
+      }
+    );
+
+    if (!response.ok) throw new Error(await response.text());
+    const updated = await response.json();
+    if (!updated.length) throw new Error("The ticket was already changed.");
+
+    await loadTickets(true);
+    renderManager();
+    showMessage(`Ticket ${number} is available again.`, "ok");
+  } catch (error) {
+    console.error(error);
+    showMessage(error.message || "Could not reset the ticket.", "error");
+  }
+}
+
+function exportCsv() {
+  const soldTickets = tickets.filter(ticket => ticket.status === "sold");
+  const columns = [
+    "Ticket Number","Buyer Name","Buyer Phone","Sold By",
+    "Payment Status","Ticket Price","Notes","Updated At"
+  ];
+
+  const rows = soldTickets.map(ticket => [
+    ticket.number,
+    ticket.buyer_name || "",
+    ticket.buyer_phone || "",
+    ticket.sold_by || "",
+    ticket.payment_status || "pending",
+    TICKET_PRICE,
+    ticket.notes || "",
+    ticket.updated_at || ""
+  ]);
+
+  const csv = [columns, ...rows]
+    .map(row => row.map(csvCell).join(","))
+    .join("\r\n");
+
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `WinchmoreHill4s-Raffle-Sales-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
 document.getElementById("refresh").addEventListener("click", () => loadTickets());
+document.getElementById("managerOpen").addEventListener("click", openManager);
+document.getElementById("managerUnlock").addEventListener("click", unlockManager);
+document.getElementById("managerCancel").addEventListener("click", () => managerDialog.close());
+document.getElementById("managerClose").addEventListener("click", () => managerDialog.close());
+document.getElementById("exportCsv").addEventListener("click", exportCsv);
+document.getElementById("managerPin").addEventListener("keydown", event => {
+  if (event.key === "Enter") unlockManager();
+});
 document.getElementById("cancel").addEventListener("click", () => dialog.close());
 document.getElementById("closeReceipt").addEventListener("click", () => dialog.close());
 document.getElementById("saveImage").addEventListener("click", saveTicketImage);
