@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Winchmore Hill 4s Raffle</title>
+  <style>
+    :root {
+      --purple:#3a0d5f;
+      --purple2:#641f93;
+      --gold:#f5c443;
+      --green:#1e9b55;
+      --red:#d64545;
+      --bg:#f6f2fa;
+      --card:#ffffff;
+      --text:#21152f;
+      --muted:#6d6478;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family:Arial,Helvetica,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    header {
+      background:linear-gradient(135deg,var(--purple),var(--purple2));
+      color:#fff;
+      padding:22px 16px;
+      text-align:center;
+    }
+    header h1 { margin:0 0 6px; font-size:30px; }
+    header p { margin:0; color:#f2e8fa; }
+    main { max-width:1000px; margin:auto; padding:16px; }
+    .stats {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+      margin-bottom:14px;
+    }
+    .stat {
+      background:var(--card);
+      border-radius:14px;
+      padding:14px 8px;
+      text-align:center;
+      box-shadow:0 4px 18px rgba(50,20,70,.08);
+    }
+    .stat strong { display:block; color:var(--purple2); font-size:24px; }
+    .toolbar { display:flex; gap:10px; margin-bottom:12px; }
+    .search {
+      flex:1;
+      padding:13px;
+      border:1px solid #d8cee2;
+      border-radius:12px;
+      background:white;
+      font-size:16px;
+    }
+    button { font:inherit; }
+    .refresh {
+      border:0;
+      background:var(--purple2);
+      color:white;
+      font-weight:700;
+      border-radius:12px;
+      padding:0 16px;
+      cursor:pointer;
+    }
+    .legend { display:flex; gap:14px; color:var(--muted); font-size:14px; margin:8px 0 14px; }
+    .dot { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; }
+    .tickets {
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(68px,1fr));
+      gap:8px;
+    }
+    .ticket {
+      border:0;
+      color:#fff;
+      border-radius:11px;
+      min-height:52px;
+      padding:12px 6px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .available { background:var(--green); }
+    .sold { background:var(--red); }
+    .message {
+      display:none;
+      margin:12px 0;
+      padding:12px;
+      border-radius:10px;
+      font-weight:700;
+    }
+    .message.show { display:block; }
+    .message.ok { background:#e7f8ef; color:#146c3b; }
+    .message.error { background:#fdeaea; color:#a32626; }
+    dialog {
+      width:min(94vw,470px);
+      border:0;
+      border-radius:18px;
+      padding:0;
+      box-shadow:0 20px 70px rgba(0,0,0,.28);
+    }
+    dialog::backdrop { background:rgba(25,10,35,.65); }
+    .modal-head { background:var(--purple2); color:white; padding:17px; }
+    .modal-head h2 { margin:0; }
+    .modal-body { padding:18px; }
+    label { display:block; margin:12px 0 6px; font-weight:700; }
+    .field {
+      width:100%;
+      border:1px solid #d8cee2;
+      border-radius:10px;
+      padding:12px;
+      font-size:16px;
+    }
+    .actions { display:flex; gap:10px; margin-top:18px; }
+    .btn {
+      flex:1;
+      border:0;
+      border-radius:11px;
+      padding:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .primary { background:var(--gold); color:#2d1542; }
+    .secondary { background:#ece6f1; color:#2d1542; }
+    .receipt {
+      display:none;
+      text-align:center;
+      background:#faf7fd;
+      border:2px dashed var(--purple2);
+      border-radius:14px;
+      padding:16px;
+    }
+    .receipt.show { display:block; }
+    .receipt-number {
+      color:var(--purple2);
+      font-size:46px;
+      font-weight:900;
+      margin:8px 0;
+    }
+    .small { color:var(--muted); font-size:13px; }
+    footer { text-align:center; color:var(--muted); padding:22px; font-size:13px; }
+    @media(max-width:600px) {
+      header h1 { font-size:24px; }
+      .stat strong { font-size:20px; }
+      .tickets { grid-template-columns:repeat(4,1fr); }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Winchmore Hill 4s Raffle</h1>
+  <p>£1,000 Cash Draw · Shared live ticket register</p>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat"><strong id="soldCount">0</strong>Sold</div>
+    <div class="stat"><strong id="availableCount">0</strong>Available</div>
+    <div class="stat"><strong id="paidCount">0</strong>Paid</div>
+  </section>
+
+  <div id="message" class="message"></div>
+
+  <div class="toolbar">
+    <input id="search" class="search" placeholder="Search ticket number, e.g. 087" inputmode="numeric">
+    <button id="refresh" class="refresh">Refresh</button>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--green)"></span>Available</span>
+    <span><span class="dot" style="background:var(--red)"></span>Sold</span>
+  </div>
+
+  <section id="tickets" class="tickets"></section>
+</main>
+
+<dialog id="dialog">
+  <div class="modal-head"><h2 id="dialogTitle">Sell Ticket</h2></div>
+  <div class="modal-body">
+    <form id="saleForm">
+      <input type="hidden" id="ticketNumber">
+
+      <label for="buyerName">Buyer name</label>
+      <input class="field" id="buyerName" required maxlength="80">
+
+      <label for="buyerPhone">Buyer phone</label>
+      <input class="field" id="buyerPhone" required maxlength="30" inputmode="tel">
+
+      <label for="soldBy">Sold by</label>
+      <input class="field" id="soldBy" required maxlength="80">
+
+      <label for="paymentStatus">Payment</label>
+      <select class="field" id="paymentStatus">
+        <option value="paid">Paid</option>
+        <option value="pending">Pending</option>
+      </select>
+
+      <label for="notes">Notes (optional)</label>
+      <input class="field" id="notes" maxlength="150">
+
+      <div class="actions">
+        <button type="button" class="btn secondary" id="cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="sellButton">Sell Ticket</button>
+      </div>
+    </form>
+
+    <div id="receipt" class="receipt">
+      <h3>Digital Ticket</h3>
+      <div class="small">WINCHMORE HILL 4s · £1,000 CASH DRAW</div>
+      <div id="receiptNumber" class="receipt-number">000</div>
+      <div id="receiptBuyer"></div>
+      <div id="receiptSeller" class="small"></div>
+      <div id="receiptPayment" class="small"></div>
+      <div class="actions">
+        <button type="button" class="btn primary" id="saveImage">Save Ticket Image</button>
+        <button type="button" class="btn secondary" id="closeReceipt">Close</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<footer>Updates automatically every 5 seconds.</footer>
+
+<script>
+const SUPABASE_URL = "https://vuheyrorksedrlhbgtyy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_aiMwWUJt7SeiEdiQGH8Cjw_FfH2hm2D";
+const TABLE = "tickets";
+
+const headers = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": "Bearer " + SUPABASE_KEY,
+  "Content-Type": "application/json"
+};
+
+let tickets = [];
+let latestReceipt = null;
+
+const ticketsEl = document.getElementById("tickets");
+const searchEl = document.getElementById("search");
+const messageEl = document.getElementById("message");
+const dialog = document.getElementById("dialog");
+const form = document.getElementById("saleForm");
+const receipt = document.getElementById("receipt");
+
+function showMessage(text, type="ok") {
+  messageEl.textContent = text;
+  messageEl.className = "message show " + type;
+  clearTimeout(showMessage.timer);
+  showMessage.timer = setTimeout(() => messageEl.className = "message", 4500);
+}
+
+function normalizeNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits ? digits.padStart(3, "0").slice(-3) : "";
+}
+
+async function loadTickets(silent=false) {
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/${TABLE}?select=number,status,buyer_name,buyer_phone,sold_by,payment_status,notes,updated_at&order=number.asc`,
+      { headers, cache:"no-store" }
+    );
+    if (!response.ok) throw new Error(await response.text());
+    tickets = await response.json();
+    render();
+  } catch (error) {
+    console.error(error);
+    if (!silent) showMessage("Could not load tickets. Check the Supabase policies.", "error");
+  }
+}
+
+function render() {
+  const query = normalizeNumber(searchEl.value);
+  const visible = query ? tickets.filter(t => String(t.number) === query) : tickets;
+
+  ticketsEl.innerHTML = "";
+  visible.forEach(ticket => {
+    const isSold = ticket.status === "sold";
+    const button = document.createElement("button");
+    button.className = "ticket " + (isSold ? "sold" : "available");
+    button.textContent = ticket.number;
+    button.addEventListener("click", () => isSold ? showSold(ticket) : openSale(ticket.number));
+    ticketsEl.appendChild(button);
+  });
+
+  const sold = tickets.filter(t => t.status === "sold").length;
+  const paid = tickets.filter(t => t.status === "sold" && t.payment_status === "paid").length;
+  document.getElementById("soldCount").textContent = sold;
+  document.getElementById("availableCount").textContent = tickets.length - sold;
+  document.getElementById("paidCount").textContent = paid;
+}
+
+function showSold(ticket) {
+  showMessage(
+    `Ticket ${ticket.number} is SOLD to ${ticket.buyer_name || "Unknown"} · Sold by ${ticket.sold_by || "Unknown"} · Payment: ${ticket.payment_status || "pending"}`,
+    "error"
+  );
+}
+
+function openSale(number) {
+  form.reset();
+  receipt.classList.remove("show");
+  form.style.display = "block";
+  document.getElementById("ticketNumber").value = number;
+  document.getElementById("dialogTitle").textContent = "Sell Ticket " + number;
+  dialog.showModal();
+}
+
+async function sellTicket(event) {
+  event.preventDefault();
+
+  const number = document.getElementById("ticketNumber").value;
+  const buyerName = document.getElementById("buyerName").value.trim();
+  const buyerPhone = document.getElementById("buyerPhone").value.trim();
+  const soldBy = document.getElementById("soldBy").value.trim();
+  const paymentStatus = document.getElementById("paymentStatus").value;
+  const notes = document.getElementById("notes").value.trim();
+  const sellButton = document.getElementById("sellButton");
+
+  sellButton.disabled = true;
+  sellButton.textContent = "Saving...";
+
+  try {
+    const endpoint = `${SUPABASE_URL}/rest/v1/${TABLE}?number=eq.${encodeURIComponent(number)}&status=eq.available`;
+    const response = await fetch(endpoint, {
+      method:"PATCH",
+      headers: { ...headers, "Prefer":"return=representation" },
+      body: JSON.stringify({
+        status:"sold",
+        buyer_name:buyerName,
+        buyer_phone:buyerPhone,
+        sold_by:soldBy,
+        payment_status:paymentStatus,
+        notes:notes || null,
+        updated_at:new Date().toISOString()
+      })
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+    const updated = await response.json();
+
+    if (!updated.length) {
+      await loadTickets(true);
+      throw new Error("That number has already been sold by someone else.");
+    }
+
+    latestReceipt = updated[0];
+    await loadTickets(true);
+    showReceipt(latestReceipt);
+    showMessage(`Ticket ${number} sold successfully.`, "ok");
+  } catch (error) {
+    console.error(error);
+    showMessage(error.message || "Could not save ticket.", "error");
+  } finally {
+    sellButton.disabled = false;
+    sellButton.textContent = "Sell Ticket";
+  }
+}
+
+function showReceipt(ticket) {
+  form.style.display = "none";
+  receipt.classList.add("show");
+  document.getElementById("receiptNumber").textContent = ticket.number;
+  document.getElementById("receiptBuyer").textContent = "Buyer: " + (ticket.buyer_name || "");
+  document.getElementById("receiptSeller").textContent = "Sold by: " + (ticket.sold_by || "");
+  document.getElementById("receiptPayment").textContent =
+    ticket.payment_status === "paid" ? "PAYMENT RECEIVED" : "PAYMENT PENDING";
+}
+
+function saveTicketImage() {
+  if (!latestReceipt) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 1350;
+  const ctx = canvas.getContext("2d");
+
+  const g = ctx.createLinearGradient(0,0,1080,1350);
+  g.addColorStop(0,"#26083f");
+  g.addColorStop(1,"#641f93");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,1080,1350);
+
+  ctx.fillStyle = "#f5c443";
+  ctx.fillRect(55,55,970,1240);
+  ctx.fillStyle = "#26083f";
+  ctx.fillRect(82,82,916,1186);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 56px Arial";
+  ctx.fillText("WINCHMORE HILL 4s",540,190);
+
+  ctx.fillStyle = "#f5c443";
+  ctx.font = "bold 44px Arial";
+  ctx.fillText("£1,000 CASH DRAW",540,260);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "30px Arial";
+  ctx.fillText("OFFICIAL DIGITAL TICKET",540,350);
+
+  ctx.fillStyle = "#f5c443";
+  ctx.font = "bold 190px Arial";
+  ctx.fillText(latestReceipt.number,540,640);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 38px Arial";
+  ctx.fillText("Buyer",540,760);
+  ctx.font = "34px Arial";
+  ctx.fillText(latestReceipt.buyer_name || "",540,820);
+
+  ctx.font = "30px Arial";
+  ctx.fillText("Sold by: " + (latestReceipt.sold_by || ""),540,920);
+
+  ctx.fillStyle = latestReceipt.payment_status === "paid" ? "#f5c443" : "#ffffff";
+  ctx.font = "bold 32px Arial";
+  ctx.fillText(latestReceipt.payment_status === "paid" ? "PAYMENT RECEIVED" : "PAYMENT PENDING",540,995);
+
+  ctx.fillStyle = "#f5c443";
+  ctx.font = "bold 29px Arial";
+  ctx.fillText("Thank you for supporting the team!",540,1125);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "23px Arial";
+  ctx.fillText("Keep this image as proof of your raffle number.",540,1190);
+
+  const link = document.createElement("a");
+  link.download = `WinchmoreHill4s-Ticket-${latestReceipt.number}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+document.getElementById("refresh").addEventListener("click", () => loadTickets());
+document.getElementById("cancel").addEventListener("click", () => dialog.close());
+document.getElementById("closeReceipt").addEventListener("click", () => dialog.close());
+document.getElementById("saveImage").addEventListener("click", saveTicketImage);
+searchEl.addEventListener("input", render);
+form.addEventListener("submit", sellTicket);
+
+loadTickets();
+setInterval(() => loadTickets(true), 5000);
+</script>
+</body>
+</html>
