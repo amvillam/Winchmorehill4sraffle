@@ -669,55 +669,56 @@ async function drawWinner() {
   drawButton.disabled = true;
   drawButton.textContent = "🎰 DRAWING...";
 
-// 15-second roulette animation
+// 15-second RANDOM roulette animation
 const animationTime = 15000;
 const startTime = performance.now();
 
-// Complete several full cycles through 001-200,
-// then finish exactly on the securely selected winner.
-const totalSteps = (5 * 200) + winningNumber;
+await new Promise(async resolve => {
+  let lastNumber = null;
 
-await new Promise(resolve => {
-  let lastStep = -1;
-
-  function animate(currentTime) {
-    const elapsed = currentTime - startTime;
+  while (true) {
+    const elapsed = performance.now() - startTime;
     const progress = Math.min(elapsed / animationTime, 1);
 
-    // Fast at the beginning, progressively slower near the winner
-    const easedProgress = 1 - Math.pow(1 - progress, 4);
+    if (progress >= 1) break;
 
-    const step = Math.min(
-      Math.floor(easedProgress * totalSteps),
-      totalSteps
+    // Show a RANDOM number from 001 to 200
+    let rouletteNumber;
+
+    do {
+      rouletteNumber = getSecureRandomNumber();
+    } while (rouletteNumber === lastNumber);
+
+    lastNumber = rouletteNumber;
+
+    const rouletteDisplay =
+      String(rouletteNumber).padStart(3, "0");
+
+    resultEl.innerHTML =
+      "<div style='font-size:20px;'>🎰 DRAWING 🎰</div>" +
+      "<div style='font-size:64px; font-weight:bold; margin-top:10px;'>" +
+      rouletteDisplay +
+      "</div>";
+
+    // Extremely fast at first, then progressively slower
+    const delay =
+      35 + Math.pow(progress, 3) * 750;
+
+    await new Promise(wait =>
+      setTimeout(wait, delay)
     );
-
-    if (step !== lastStep) {
-      lastStep = step;
-
-      const rouletteNumber =
-        step === totalSteps
-          ? winningNumber
-          : ((step - 1 + 200) % 200) + 1;
-
-      const rouletteDisplay =
-        String(rouletteNumber).padStart(3, "0");
-
-      resultEl.innerHTML =
-        "<div style='font-size:20px;'>🎰 DRAWING 🎰</div>" +
-        "<div style='font-size:64px; font-weight:bold; margin-top:10px;'>" +
-        rouletteDisplay +
-        "</div>";
-    }
-
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      resolve();
-    }
   }
 
-  requestAnimationFrame(animate);
+  // Finish exactly on the securely selected winner
+  resultEl.innerHTML =
+    "<div style='font-size:20px;'>🎰 DRAWING 🎰</div>" +
+    "<div style='font-size:64px; font-weight:bold; margin-top:10px;'>" +
+    displayNumber +
+    "</div>";
+
+  await new Promise(wait => setTimeout(wait, 900));
+
+  resolve();
 });
 
   // Find the information attached to the actual winning ticket
