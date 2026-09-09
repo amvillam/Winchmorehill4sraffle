@@ -669,24 +669,56 @@ async function drawWinner() {
   drawButton.disabled = true;
   drawButton.textContent = "🎰 DRAWING...";
 
-  // Roulette animation - visual only
-  const startTime = Date.now();
-  const animationTime = 5000;
+// 15-second roulette animation
+const animationTime = 15000;
+const startTime = performance.now();
 
-  await new Promise(resolve => {
-    const spin = setInterval(() => {
-      const fakeNumber = getSecureRandomNumber();
-      const fakeDisplay = String(fakeNumber).padStart(3, "0");
+// Complete several full cycles through 001-200,
+// then finish exactly on the securely selected winner.
+const totalSteps = (5 * 200) + winningNumber;
+
+await new Promise(resolve => {
+  let lastStep = -1;
+
+  function animate(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / animationTime, 1);
+
+    // Fast at the beginning, progressively slower near the winner
+    const easedProgress = 1 - Math.pow(1 - progress, 4);
+
+    const step = Math.min(
+      Math.floor(easedProgress * totalSteps),
+      totalSteps
+    );
+
+    if (step !== lastStep) {
+      lastStep = step;
+
+      const rouletteNumber =
+        step === totalSteps
+          ? winningNumber
+          : ((step - 1 + 200) % 200) + 1;
+
+      const rouletteDisplay =
+        String(rouletteNumber).padStart(3, "0");
 
       resultEl.innerHTML =
-        "🎰 " + fakeDisplay + " 🎰";
+        "<div style='font-size:20px;'>🎰 DRAWING 🎰</div>" +
+        "<div style='font-size:64px; font-weight:bold; margin-top:10px;'>" +
+        rouletteDisplay +
+        "</div>";
+    }
 
-      if (Date.now() - startTime >= animationTime) {
-        clearInterval(spin);
-        resolve();
-      }
-    }, 100);
-  });
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      resolve();
+    }
+  }
+
+  requestAnimationFrame(animate);
+});
 
   // Find the information attached to the actual winning ticket
   const winningTicket = tickets.find(ticket =>
