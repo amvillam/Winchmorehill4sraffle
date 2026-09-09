@@ -275,7 +275,17 @@
         <button type="button" class="btn primary" id="managerUnlock">Unlock</button>
       </div>
     </div>
+<div id="drawSection" style="margin-top:20px; display:none;">
+  <h3>🏆 Raffle Winner Draw</h3>
 
+  <button type="button" class="btn primary" id="drawWinnerBtn">
+    🎲 DRAW WINNER
+  </button>
+
+  <div id="winnerResult"
+       style="margin-top:20px; font-size:28px; font-weight:bold;">
+  </div>
+</div>
     <div id="managerContent" style="display:none">
       <div class="manager-grid">
         <div class="manager-card"><strong id="managerSold">0</strong>Sold tickets</div>
@@ -610,7 +620,59 @@ function unlockManager() {
 
   document.getElementById("managerLock").style.display = "none";
   document.getElementById("managerContent").style.display = "block";
+  document.getElementById("drawSection").style.display = "block";
   renderManager();
+}
+
+let liveDrawCompleted = false;
+
+function getSecureRandomNumber() {
+  const max = 200;
+  const limit = Math.floor(0x100000000 / max) * max;
+
+  let randomValue;
+
+  do {
+    const randomArray = new Uint32Array(1);
+    crypto.getRandomValues(randomArray);
+    randomValue = randomArray[0];
+  } while (randomValue >= limit);
+
+  return (randomValue % max) + 1;
+}
+
+function drawWinner() {
+  const isLiveDraw = confirm(
+    "LIVE DRAW?\n\nPress OK for the FINAL £1,000 live draw.\nPress Cancel for TEST MODE."
+  );
+
+  if (isLiveDraw && liveDrawCompleted) {
+    alert("The official live draw has already been completed.");
+    return;
+  }
+
+  if (isLiveDraw) {
+    const confirmed = confirm(
+      "⚠️ FINAL LIVE DRAW ⚠️\n\nThis will select the official winner from 001 to 200.\n\nOnce drawn, it cannot be drawn again.\n\nContinue?"
+    );
+
+    if (!confirmed) return;
+  }
+
+  const winningNumber = getSecureRandomNumber();
+  const displayNumber = String(winningNumber).padStart(3, "0");
+
+  document.getElementById("winnerResult").innerHTML =
+    (isLiveDraw ? "🏆 OFFICIAL WINNER: " : "🧪 TEST WINNER: ") +
+    displayNumber +
+    " 🏆";
+
+  if (isLiveDraw) {
+    liveDrawCompleted = true;
+    document.getElementById("drawWinnerBtn").disabled = true;
+    document.getElementById("drawWinnerBtn").textContent =
+      "LIVE DRAW COMPLETED";
+  }
 }
 
 function renderManager() {
@@ -753,6 +815,7 @@ document.getElementById("managerUnlock").addEventListener("click", unlockManager
 document.getElementById("managerCancel").addEventListener("click", () => managerDialog.close());
 document.getElementById("managerClose").addEventListener("click", () => managerDialog.close());
 document.getElementById("exportCsv").addEventListener("click", exportCsv);
+document.getElementById("drawWinnerBtn").addEventListener("click", drawWinner);
 document.getElementById("managerPin").addEventListener("keydown", event => {
   if (event.key === "Enter") unlockManager();
 });
