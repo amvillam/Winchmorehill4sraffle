@@ -641,7 +641,7 @@ function getSecureRandomNumber() {
   return (randomValue % max) + 1;
 }
 
-function drawWinner() {
+async function drawWinner() {
   const isLiveDraw = confirm(
     "LIVE DRAW?\n\nPress OK for the FINAL £1,000 live draw.\nPress Cancel for TEST MODE."
   );
@@ -659,19 +659,62 @@ function drawWinner() {
     if (!confirmed) return;
   }
 
+  // Select the REAL winner securely BEFORE the animation starts
   const winningNumber = getSecureRandomNumber();
   const displayNumber = String(winningNumber).padStart(3, "0");
 
-  document.getElementById("winnerResult").innerHTML =
-    (isLiveDraw ? "🏆 OFFICIAL WINNER: " : "🧪 TEST WINNER: ") +
-    displayNumber +
-    " 🏆";
+  const resultEl = document.getElementById("winnerResult");
+  const drawButton = document.getElementById("drawWinnerBtn");
+
+  drawButton.disabled = true;
+  drawButton.textContent = "🎰 DRAWING...";
+
+  // Roulette animation - visual only
+  const startTime = Date.now();
+  const animationTime = 5000;
+
+  await new Promise(resolve => {
+    const spin = setInterval(() => {
+      const fakeNumber = getSecureRandomNumber();
+      const fakeDisplay = String(fakeNumber).padStart(3, "0");
+
+      resultEl.innerHTML =
+        "🎰 " + fakeDisplay + " 🎰";
+
+      if (Date.now() - startTime >= animationTime) {
+        clearInterval(spin);
+        resolve();
+      }
+    }, 100);
+  });
+
+  // Find the information attached to the actual winning ticket
+  const winningTicket = tickets.find(ticket =>
+    Number(ticket.number) === winningNumber
+  );
+
+  const buyerName =
+    winningTicket?.buyer_name?.trim() || "Buyer not entered yet";
+
+  const soldBy =
+    winningTicket?.sold_by?.trim() || "Not assigned";
+
+  resultEl.innerHTML =
+    (isLiveDraw ? "🏆 OFFICIAL WINNER 🏆" : "🧪 TEST WINNER") +
+    "<br><br>" +
+    "<span style='font-size:48px;'>🎟️ " + displayNumber + "</span>" +
+    "<br><br>" +
+    "<span style='font-size:20px;'>Winner: " + buyerName + "</span>" +
+    "<br>" +
+    "<span style='font-size:18px;'>Sold by: " + soldBy + "</span>";
 
   if (isLiveDraw) {
     liveDrawCompleted = true;
-    document.getElementById("drawWinnerBtn").disabled = true;
-    document.getElementById("drawWinnerBtn").textContent =
-      "LIVE DRAW COMPLETED";
+    drawButton.disabled = true;
+    drawButton.textContent = "🏆 LIVE DRAW COMPLETED";
+  } else {
+    drawButton.disabled = false;
+    drawButton.textContent = "🎲 DRAW WINNER";
   }
 }
 
